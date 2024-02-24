@@ -7,6 +7,7 @@ const COLOR_PALETTE = {
   White: '#FFFFFF', Black: '#000000', Black75: '#404040',
   Black50: '#7F7F7F', Black25: '#BFBFBF', BlueAAA: '#0C57A8'
 };
+const cache = CacheService.getScriptCache();
 
 /**
  * Main function to run the alert analysis and reporting process.
@@ -141,11 +142,19 @@ function calculateTopAlertsPercent(data, totalAlertsCount) {
  * @return {Object[]} An array of email alert objects with subject and count.
  */
 async function fetchEmailAlerts() {
+  const cacheKey = 'emailAlerts';
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
   const query = `(to:root OR from:root) AND newer_than:100d`;
   try {
     const threads = await GmailApp.search(query);
     let subjects = threads.flatMap(thread => thread.getMessages().map(message => message.getSubject()));
-    return deduplicateAlerts(subjects);
+    const uniqueSubjects = deduplicateAlerts(subjects);
+    cache.put(cacheKey, JSON.stringify(uniqueSubjects), 21600); // Cache for 6 hours
+    return uniqueSubjects;
   } catch (error) {
     Logger.log('Error fetching email alerts: ' + error.toString());
     return []; // Return empty array on error to maintain function's contract
@@ -184,6 +193,12 @@ function deduplicateAlerts(subjects) {
  * @return {Object[]} Array of incident objects with count and subject.
  */
 async function fetchVictorOpsIncidents() {
+  const cacheKey = 'pagingIncidents';
+  const cachedData = cache.get(cacheKey);
+  if (cachedData) {
+    return JSON.parse(cachedData);
+  }
+
   const daysBefore = 60;
   const dateISO8601 = getDateDaysBefore(daysBefore);
   const apiUrl = 'https://api.victorops.com/api-reporting/v2/incidents';
@@ -206,6 +221,9 @@ async function fetchVictorOpsIncidents() {
     const responseData = JSON.parse(response.getContentText());
 
     if (responseData && responseData.incidents) {
+      let incidents = responseData.incidents.map(incident => incident.service);
+      const uniqueIncidents = deduplicateAlerts(incidents);
+      cache.put(cacheKey, JSON.stringify(uniqueIncidents), 21600); // Cache for 6 hours
       return deduplicateAlerts(responseData.incidents.map(incident => incident.service));
     } else {
       console.error("No incidents data found in response");
