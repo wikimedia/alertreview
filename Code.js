@@ -19,21 +19,35 @@ const cacheIsEnabled = true
 /**
  * Gets a value from the cache only if the cache is enabled.
  * @param {string} key - The key to use for the cache lookup.
- * @returns The cached value, or null if the cache is disabled or the key is not found.
+ * @returns {string|null} The cached value, or null if the cache is disabled or the key is not found.
  */
 function getFromCache (key) {
-  return cacheIsEnabled ? cacheService.get(key) : null
+  if (!cacheIsEnabled) return null
+
+  try {
+    return cacheService.get(key)
+  } catch (error) {
+    const errorMessage = `Error retrieving from cache (key: ${key}): ${error}`
+    Logger.log(errorMessage)
+    throw new Error(errorMessage)
+  }
 }
 
 /**
  * Puts a value into the cache only if the cache is enabled.
  * @param {string} key - The key to use for the cache store.
- * @param {string} value - The data to store in the cache.
+ * @param {string} data - The data to store in the cache.
  * @param {number} cacheExpirationSeconds - The time to live (TTL) for the cache entry.
  */
 function putInCache (key, data, cacheExpirationSeconds) {
-  if (cacheIsEnabled) {
+  if (!cacheIsEnabled) return
+
+  try {
     cacheService.put(key, data, cacheExpirationSeconds)
+  } catch (error) {
+    const errorMessage = `Error storing in cache (key: ${key}): ${error}`
+    Logger.log(errorMessage)
+    throw new Error(errorMessage)
   }
 }
 
@@ -41,16 +55,23 @@ function putInCache (key, data, cacheExpirationSeconds) {
 
 /**
  * Calculates the total count of alerts.
- * @param {Object[]} alertData - Array of alert objects with 'count' properties.
+ * @param {object[]} alertData - Array of alert objects with 'count' properties.
  * @returns {number} Total count of alerts.
  */
 function calculateTotalAlertCount (alertData) {
+  if (!Array.isArray(alertData)) {
+    Logger.log('calculateTotalAlertCount: alertData is not an array')
+    const errorMessage = `Error calculating alert count: ${alertData} is not an array`
+    Logger.log(errorMessage)
+    throw new Error(errorMessage)
+  }
+
   return alertData.reduce((total, alert) => total + alert.count, 0)
 }
 
 /**
  * Calculates the percentage of top alerts out of the total number of alerts.
- * @param {Object[]} topAlerts - The top alerts data.
+ * @param {object[]} topAlerts - The top alerts data.
  * @param {number} totalAlertCount - The total count of all alerts.
  * @returns {string} The percentage of total alerts represented by the top alerts, formatted as a string.
  */
@@ -64,7 +85,7 @@ function calculateTopAlertsPercentage (topAlerts, totalAlertCount) {
 /**
  * Gets a date string that is a certain number of days before the current date.
  * @param {number} daysBefore - The number of days before today.
- * @return {string} The date in ISO 8601 format.
+ * @returns {string} The date in ISO 8601 format.
  */
 function formatDateISO (daysBefore) {
   const date = new Date()
@@ -77,7 +98,7 @@ function formatDateISO (daysBefore) {
 /**
  * Normalizes subject strings and extracts any multiplier.
  * @param {string} subject - The subject string to normalize.
- * @returns {Object} An object containing the normalized subject and multiplier.
+ * @returns {object} An object containing the normalized subject and multiplier.
  */
 function extractNormalizedSubject (subject) {
   let normalized = subject.toLowerCase().trim()
@@ -85,7 +106,7 @@ function extractNormalizedSubject (subject) {
   let multiplier = 1
   if (multiplierMatch) {
     multiplier = parseInt(multiplierMatch[1] || multiplierMatch[2], 10)
-    normalized = normalized.replace(/\[\d+x\]|\[FIRING:\d+\]/, '').trim()
+    normalized = normalized.replace(/\[[^\]]+\]/g, '').trim()
   }
   return { normalizedSubject: normalized, multiplier }
 }
@@ -93,7 +114,7 @@ function extractNormalizedSubject (subject) {
 /**
  * Aggregates and normalizes alerts from a list of subjects.
  * @param {string[]} subjects - The subjects to process.
- * @returns {Object[]} An array of objects each containing a subject and its count.
+ * @returns {object[]} An array of objects each containing a subject and its count.
  */
 function aggregateAlerts (subjects) {
   const counts = subjects.reduce((acc, subject) => {
@@ -130,7 +151,7 @@ function appendStyledText (body, text, styleType) {
  * Appends a styled table to a Google Document.
  * @param {GoogleAppsScript.Document.Body} body - The document body.
  * @param {Array<string>} headers - Table headers.
- * @param {Array<Object>} data - Table data.
+ * @param {Array<object>} data - Table data.
  * @param {number} totalAlertCount - Total alert count for percentage calculations.
  */
 function appendStyledTable (body, headers, data, totalAlertCount) {
@@ -146,7 +167,7 @@ function appendStyledTable (body, headers, data, totalAlertCount) {
   const headerRow = table.appendTableRow()
   headers.forEach(header => {
     const cell = headerRow.appendTableCell(header)
-    cell.setBackgroundColor(styleAttributes.title.BACKGROUND_COLOR).setBold(styleAttributes.title.BOLD).setFontSize(styleAttributes.title.FONT_SIZE).setForegroundColor(styleAttributes.title.FOREGROUND_COLOR)
+    cell.setAttributes(styleAttributes.title)
   })
 
   data.forEach(({ count, subject }) => {
@@ -161,7 +182,7 @@ function appendStyledTable (body, headers, data, totalAlertCount) {
 
 /**
  * Fetches email alerts and processes them for reporting.
- * @returns {Promise<Object[]>} Processed email alerts.
+ * @returns {Promise<object[]>} Processed email alerts.
  */
 async function fetchAndProcessEmailAlerts () {
   const cacheKey = 'emailAlerts'
@@ -188,7 +209,7 @@ async function fetchAndProcessEmailAlerts () {
 
 /**
  * Fetches VictorOps incidents and processes them for reporting.
- * @returns {Promise<Object[]>} Processed incidents.
+ * @returns {Promise<object[]>} Processed incidents.
  */
 async function fetchAndProcessVictorOpsIncidents () {
   const cacheKey = 'pagingIncidents'
@@ -234,8 +255,8 @@ async function fetchAndProcessVictorOpsIncidents () {
       throw new Error(errorMessage)
     }
   } catch (error) {
-    const errorMessage = `Failed to fetch VictorOps incidents: ${error}`
-    console.error(errorMessage)
+    const errorMessage = `Error fetching VictorOps incidents: ${error.toString()}`
+    Logger.log(errorMessage)
     throw new Error(errorMessage)
   }
 }
@@ -247,17 +268,23 @@ async function fetchAndProcessVictorOpsIncidents () {
  * @param {GoogleAppsScript.Document.Body} body - The body of the document to prepare.
  */
 function prepareDocument (body) {
-  body.clear()
-  appendStyledText(body, 'ALERT REVIEW', 'title')
-  appendStyledText(body, 'Q3', 'subtitle')
-  body.appendHorizontalRule()
+  try {
+    body.clear()
+    appendStyledText(body, 'ALERT REVIEW', 'title')
+    appendStyledText(body, 'Q3', 'subtitle')
+    body.appendHorizontalRule()
+  } catch (error) {
+    const errorMessage = `Error preparing document: ${error.toString()}`
+    Logger.log(errorMessage)
+    throw new Error(errorMessage)
+  }
 }
 
 /**
  * Writes a specific section of alerts into the document.
  * @param {GoogleAppsScript.Document.Body} body - The body of the Google Doc.
  * @param {string} sectionTitle - The section's title.
- * @param {Array} data - The alerts data to be written.
+ * @param {Array} fetchDataFunction - The alerts data to be written.
  */
 async function writeAlertsSection (body, sectionTitle, fetchDataFunction) {
   try {
@@ -271,7 +298,9 @@ async function writeAlertsSection (body, sectionTitle, fetchDataFunction) {
 
     body.appendHorizontalRule()
   } catch (error) {
-    Logger.log(`Error writing alerts analysis: ${error}`)
+    const errorMessage = `Error writing alerts analysis: ${error.toString()}`
+    Logger.log(errorMessage)
+    throw new Error(errorMessage)
   }
 }
 
@@ -287,9 +316,11 @@ async function generateAlertAnalysisReport () {
     await Promise.all([
       writeAlertsSection(body, 'Top Root@ mail alerts', fetchAndProcessEmailAlerts),
       writeAlertsSection(body, 'Top Paging alerts', fetchAndProcessVictorOpsIncidents)
-    ])
+    ]).catch(error => {
+      Logger.log(`Error running alerts analysis: ${error.toString()}`)
+    })
   } catch (error) {
-    Logger.log(`Error running alerts analysis: ${error}`)
+    Logger.log(`Error in report setup: ${error.toString()}`)
   }
 }
 

@@ -1,13 +1,14 @@
 {
   "plugins": [
-    "googleappsscript"
+    "googleappsscript",
+    "jsdoc"
   ],
   "env": {
     "browser": true,
     "es2021": true,
     "googleappsscript/googleappsscript": true
   },
-  "extends": "standard",
+  "extends": ["standard", "plugin:promise/recommended", "plugin:jsdoc/recommended-error"],
   "parserOptions": {
     "ecmaVersion": "latest"
   },

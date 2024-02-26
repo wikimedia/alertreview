@@ -8,14 +8,13 @@
     "url": "https://gitlab.wikimedia.org/repos/sre/alertreview"
   },
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0",
   "devDependencies": {
     "@google/clasp": "^2.4.2",
     "eslint": "^8.57.0",
     "eslint-config-standard": "^17.1.0",
     "eslint-plugin-googleappsscript": "^1.0.5",
-    "eslint-plugin-import": "^2.29.1",
-    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-jsdoc": "^48.2.0",
     "eslint-plugin-promise": "^6.1.1"
   },
   "scripts": {
